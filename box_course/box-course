@@ -1,0 +1,124 @@
+#!python
+'''
+command line utility for box course
+
+
+'''
+
+def init(args):
+    pass
+
+
+def update(args):
+    pass
+
+
+def create(args):
+    print 'running create with', args
+
+    
+def assign(args):
+    print 'running assign with', args
+
+
+def collect(args):
+    print 'running collect with', args
+
+
+def timed(args):
+    print args
+
+
+def email(args):
+    print 'running email with', args
+
+
+def update_grade_report(args):
+    print 'updating grade report with ', args
+
+
+def emacs(args):
+    '''prints org-mode lists and links'''
+    print args
+    pass
+
+
+def summarize(args):
+    '''print summary statistics.
+
+    --plot adds a histogram
+    --overall semester grades
+    '''
+    pass
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(prog='box-course')
+    
+    #http://docs.python.org/2/library/argparse.html#sub-commands
+    subparsers = parser.add_subparsers(help='help for sub-commands')
+
+    p_init = subparsers.add_parser('init', help='initialize course from roster and config file')
+    p_init.set_defaults(func=init)
+
+    p_update = subparsers.add_parser('update', 
+                                   help='update course')
+    p_update.set_defaults(func=update)
+
+    # for creating an assignment
+    p_create = subparsers.add_parser('create', help='create an assignment')
+    p_create.add_argument('assignment_label', nargs='+')
+    p_create.add_argument('-d', '--description', help='description of assignment')
+    p_create.set_defaults(func=create)
+
+    # for assigning an assignment
+    p_assign = subparsers.add_parser('assign', 
+                                     help='assign an assignment')
+    p_assign.add_argument('assignment_label', nargs='+')
+    p_assign.set_defaults(func=assign)
+
+    # for collecting an assignment
+    p_collect = subparsers.add_parser('collect', 
+                                      help='collect an assignment')
+    p_collect.add_argument('assignment_label', nargs='+')
+    p_collect.set_defaults(func=collect)
+
+    # for running a timed assessment
+    p_timed = subparsers.add_parser('timed',
+                                   help='Run a timed assessment')
+    p_timed.add_argument('assessment')
+    p_timed.add_argument('-t','--time', 
+                         type=int, 
+                         help='Time to run assessmemnt in the minutes', 
+                         default=20)
+    p_timed.set_defaults(func=timed)
+
+    # summary statistics of assignments or course
+    p_summarize = subparsers.add_parser('summarize',
+                                        help='print summary statistics')
+    p_summarize.add_argument('assessment', nargs='+')
+    p_summarize.set_defaults(func=summarize)
+
+    # for sending email to users
+    p_email = subparsers.add_parser('email', help='email class')
+    p_email.add_argument('andrewids', nargs='+')
+    p_email.add_argument('-m','--message')
+    p_email.set_defaults(func=email)
+
+    # to calculate grade reports
+    p_update_grade_report = subparsers.add_parser('update-grade-report',
+                                                  help='update grade reports')
+    p_update_grade_report.add_argument('andrewids', nargs='+')
+    p_update_grade_report.set_defaults(func=update_grade_report)
+
+    # print lists for org-mode in emacs
+    p_emacs = subparsers.add_parser('emacs', 
+                                    help='prints list of links for emacs org-mode')
+    p_emacs.add_argument('assignment')
+    p_emacs.add_argument('andrewids', nargs='+')
+    p_emacs.set_defaults(func=emacs)
+    
+
+    args = parser.parse_args()
+    args.func(args)
