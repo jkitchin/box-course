@@ -1,0 +1,65 @@
+#!python
+
+# see http://developers.box.com/oauth/
+# This is an integrated script that does step1 and step 2.
+
+import cgi, cgitb
+cgitb.enable()
+
+import json, os, requests, sys, urllib
+
+form = cgi.parse()
+
+# these are set in cgi-bin/.htaccess and you need httpd.conf to allow
+# this. You need to set these to your ID and secret.
+
+# SetEnv CLIENT_ID "fjdklaff8d9a798syf7fa"
+# SetEnv CLIENT_SECRET "uKo6aLD5RmqenaUAUOF3mDhmDHsGoY1A"
+
+# <Directory "/var/www/cgi-bin">
+#    AllowOverride All   # this is the line that allows the override
+#    Options None
+#    Order allow,deny
+#    Allow from all
+# </Directory>
+
+client_id = os.environ['CLIENT_ID']
+client_secret = os.environ['CLIENT_SECRET']
+
+auth_uri = 'https://www.box.com/api/oauth2/authorize?'
+redirect_uri = 'https://gilgamesh.cheme.cmu.edu/cgi-bin/jkitchin-box'
+token_uri = 'https://www.box.com/api/oauth2/token'
+
+if 'code' not in form:
+    # This must be step 1
+    
+    data = urllib.urlencode((('response_type','code'),
+                             ('client_id', client_id),
+                             ('redirect_uri', redirect_uri)))
+
+    print 'Status: 302'
+    print 'Location: {0}'.format(auth_uri+data)
+    print ''
+    sys.exit(0)
+else:
+    # this is step 2
+    code = form['code'][0]
+    
+    data = {'grant_type':'authorization_code',
+            'code':code,
+            'client_id':client_id,
+            'client_secret':client_secret,
+            'redirect_uri':redirect_uri}
+    
+    r = requests.post(token_uri, data=data)
+    
+    print 'Content-Disposition: attachment; filename=token.json'
+    print ''
+    
+    d = json.loads(r.text)
+
+    jdata = {'access_token':d['access_token'],
+             'refresh_token':d['refresh_token'],
+	     'client_id':client_id,
+             'client_secret':client_secret}
+    print json.dumps(jdata)
