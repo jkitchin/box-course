@@ -1,54 +1,58 @@
 * box-course
-
+This is a project to provide a set of command line utilities for running a course on box.com.
 
 ** Installation
-Use pip to install box_course
 
+*** Dependencies
+You need the following libraries to use box-course
 
+1. requests (http://www.python-requests.org/en/latest/)
+   this library is used for the box.com v2 API.
+2. PyPDF2 (https://github.com/mstamy2/PyPDF2)
+   The gradebook needs to be able to read data from PDF files. We try to use this python module, but some pdfs cannot be read by it.
+3. pdftk (http://www.pdflabs.com/tools/pdftk-the-pdf-toolkit/)
+   This is a fallback executable used to read pdfs. It is slower than the python module in my opinion, so we only use it if the python module fails. 
 
-*** TODO Dependencies
-pdftk
-PyPDF2
-# pdfminer  # not actually using this
-requests
+Finally, you need to install box-course. Clone the git repository, and use =pip install -e box-course= to install it as a developer.
 
-*** TODO Register for your box-app
-get your client id and secret
+*** Register for your box-app
+For CMU users, go to https://cmu.app.box.com/developers/services/edit/ to create a Box application. you will need a name for your application. You will get an API key (also known as your client id), and a client_secret. Make a note of these. 
 
-*** TODO Setup your webserver, and put the cgi-script there.
+You have to come back later to this site to add the Redirect url for authentication.
+
+*** Setup your webserver, and put the cgi-script there.
+To authenticate and get your tokens, you need to have access to a web-server. Install the cgi-script in box_course/cgi-bin/box-course-authenticate on your server. You need to figure out how to set environment variables for your client id and secret. For apache, you can put this in the httpd.conf file:
+
+#+BEGIN_EXAMPLE
+<Directory "/var/www/cgi-bin">
+   AllowOverride All   # this is the line that allows the override
+   Options None
+   Order allow,deny
+   Allow from all
+</Directory>
+#+END_EXAMPLE
+
+Then, in the /var/www/cgi-bin create a .htaccess file with these contents:
+
+#+BEGIN_EXAMPLE
+SetEnv CLIENT_ID "fjdklaff8d9a798syf7fa"
+SetEnv CLIENT_SECRET "uKo6aLD5RmqenaUAUOF3mDhmDHsGoY1A"
+#+END_EXAMPLE
+    
+When you visit your cgi-script, e.g.
+
+http://yourhost/cgi-bin/box-course-authenticate
+
+You will be taken to the box site to put in your password and approve the app, then you will get a token.json file in return that you need to save on your hard drive. Make note of where you save it, because you need it to configure box-course.
 
 ** Configuration and course setup
-
+Create a directory you want your course to be in, and in that directory create a file called box_course_config.py, based on this example [[./box_course/box_course_config_example.py]]. Put a copy of the course roster in this directory also. Run =box-course init= in that directory to setup the course.
 
 ** Course management
+More to come later
 
-You keep a collection of assignments in the /problems folder. You refer to assignments by a "label". When an assignment is created, a folder is created in /assessments/course-andrewid/course-andrewid-label. When you "assign" the problem, students are set to "editors" of their folders. When you "collect" the assignment, they are set to "viewers".
-
-This won't work for exams/quizzes. If the students are viewers of their folder, they can see everything in it I think.
-
-
-box-course create hello-world.py --message "due on ..."
-   this will create /assessments/course-andrewid/course-andrewid-hello-world and copy /problems/hello-world.py into it
-
-box-course create regress-2 --message "due on ..."
-   this will create /assessments/course-andrewid/course-andrewid-regress-2 and copy the contents of /problems/regress-2 into it
-
-If there is an actual file called the label, that will be assigned to the students. If a directory exists by that label, then the contents of that directory will be assigned. 
-
-box-course create assessment-label --message "due on ..."
-box-course assign assessment-label 
-box-course collect assessment-label
-
-box-course timed assessment-label --time N
-
-
-box-course update-grade-report andrewid
-
-box-course email args --message "to people in args"
-* TODO json data
-store all the data in JSON instead of shelve
-
-* TODO How to include external students?
+* List of things to do
+** TODO How to include external students?
 one problem is I want to use the course roster, which contains andrewids. I need to include other email addresses too. I could add these to the roster, but they wold be deleted with updates. 
 
 I think I need an extra roster file, with the same format, but with email addresses.
@@ -58,7 +62,7 @@ The file needs this format for consistency
 year, email, lastname, firstname
 
 F13, johnrkitchin@gmail.com, Kitchin, John
-* TODO box-cli
+** TODO box-cli
 I really want a command line ability to add, remove and edit collaborations, tasks, etc...
 
 box-cli collab --add --remove --edit
