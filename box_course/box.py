@@ -9,18 +9,36 @@ https://gilgamesh.cheme.cmu.edu/cgi-bin/jkitchin-box
 
 put in your box username and password, and save the file that pops up as token.json at the place pointed to by BOX_TOKEN. The token is good for 1 hour, but it can be refreshed for up to 2 weeks. After that, you need to reauthorize at the website.
 
-The api is not 100% covered, and even within a function not all of the options may be covered. In general, I return the raw request, but I may start returning the json data directly from box, which is buried in the request.
+The api is not 100% covered, and even within a function not all of the options may be covered. In general, I return the json data directly from box, which is buried in the request.
 
 It is not obvious what the most consistent return data is. Not all calls return 200, even when successful.
+
+This module could be the foundation for box-cli. That command might look like this:
+
+box-cli info file
+box-cli collaborate --add/--remove/--edit login role
+box-cli task --add/--remove/--edit login message
+box-cli comment file message
+
+or it could be built into a right-click context menu in windows.
 '''
-import json, os, requests, time
+import json, os, time
 
+import requests
 
-# this is undesirable here. we probably need this in an environment variable
-from box_course_config import *
+# We need to know where the BOX_TOKEN is. There are two options.
+# You can store an environment variable that reads it or it can 
+# be stored in box_course_config.py
+
+if os.path.exists('box_course_config.py'):
+    from box_course_config import *
+else:
+    BOX_TOKEN = os.environ.get('BOX_TOKEN', None)
+
+if not BOX_TOKEN:
+    raise Exception('No BOX_TOKEN found')
 
 ##### From here down should be totally general
-
 API_URI = 'https://api.box.com/2.0'
 
 def authorize():
@@ -191,6 +209,7 @@ def update_folder_information(folder_id,
                      headers=headers, 
                      data=json.dumps(data))
     return json.loads(r.text)
+
     
 def delete_folder(parent_id, recursive=False):
     '''Delete a folder with parent_id
@@ -420,12 +439,22 @@ def get_collaboration(collab_id):
 
 def delete_collaboration(collab_id):
     '''http://developers.box.com/docs/#collaborations-remove-a-collaboration'''
-    raise NotImplemented
+    headers = {"Authorization": "Bearer %s" % get_access_token()}
+    uri = '/collaborations/{0}'.format(collab_id)
+    r = requests.delete(API_URI + uri,
+                        headers=headers)
+    return json.loads(r.text)  
 
 
 def get_pending_collaborations(status='pending'):
     '''http://developers.box.com/docs/#collaborations-get-pending-collaborations'''
-    raise NotImplemented
+
+    headers = {"Authorization": "Bearer %s" % get_access_token()}
+    uri = '/collaborations?status=pending'
+    r = requests.get(API_URI + uri,
+                     headers=headers)
+    return json.loads(r.text)    
+
 
 
 ## -------------------------TASKS----------------------------
