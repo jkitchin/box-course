@@ -74,31 +74,32 @@ class MyTimer(wx.Frame):
 
 
      def OnTimer(self, event):
-          print self.countdown
-
-          if self.countdown >= 300.0:
+          print self.countdown, self.buffer_time
+          if self.countdown >= self.warning_time:
                self.progress.SetValue(self.minutesPassed * (100. / self.time))
                self.status.SetLabel('%1.2f minutes remaining.' % (self.countdown/60.))              
                self.minutesPassed += 1.
                self.countdown -= 1.
-          elif self.countdown < 300.0 and self.countdown >= 120:
+
+          elif self.countdown < self.warning_time and self.countdown >= 60.0:
                self.progress.SetValue(self.minutesPassed * (100. / self.time))
                self.status.SetLabel('%1.2f minutes remaining.' % (self.countdown/60.))
                self.status.SetBackgroundColour('yellow')
                self.minutesPassed += 1.
                self.countdown -= 1.
      
-          elif self.countdown < 120.0 and self.countdown >= 0:
+          elif self.countdown <  60.0 and self.countdown >= 0:
                self.progress.SetValue(self.minutesPassed * (100. / self.time))
                self.status.SetLabel('%1.2f minutes remaining. \nTime is running out. Start uploading now!' % (self.countdown/60.))
                self.status.SetBackgroundColour('red')
                self.minutesPassed += 1.
                self.countdown -= 1.
 
-          elif self.countdown < -10:
+          elif self.countdown < -self.buffer_time:
                self.timer.Stop()
                self.Destroy()
                
+          # this is the buffer step
           else:
                self.progress.SetValue(self.minutesPassed * (100. / self.time))
                self.status.SetLabel('The exam is over!')
@@ -116,7 +117,16 @@ class MyApp(wx.App):
          return True
 
      def set_time(self, time):
+          ''' this is the time to run the timer'''
           self.frame.time = time
+
+     def set_warning_time(self, warning_time=2):
+          ''' when this time is left the time turns orange'''
+          self.frame.warning_time = warning_time
+
+     def set_buffer_time(self, buffer_time=1):
+          '''set extra time for uploads'''
+          self.frame.buffer_time = buffer_time
 
      def run(self):
           self.frame.stopped = False
