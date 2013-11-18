@@ -10,7 +10,7 @@ setup(name = 'box_course',
       license='GPL',
       platforms=['linux'],
       packages=['box_course'],
-      scripts=['box_course/box-course.py'],
+      scripts=['box_course/box-course'],
       long_description='''\
 A command-line utility to setup and run a course using box.com
 
