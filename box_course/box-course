@@ -4,6 +4,53 @@ command line utility for box course
 
 
 '''
+# I am not sure why I can't import this.
+execfile('box_course_config.py')
+
+import json, os
+
+# Now get course specific settings
+
+from box_course.box import *
+
+
+def get_andrewids():
+    # we get andrewids from the roster file
+    ANDREWIDS = []
+    with open(ROSTER) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+        
+            fields = line.split(',')
+            andrewid = fields[1]
+            ANDREWIDS.append(andrewid)
+
+    ANDREWIDS.sort()
+    return ANDREWIDS
+
+ANDREWIDS = get_andrewids()
+
+def load_cache(assessment):
+    'assessment is a string of the problem being assessed, e.g. hello-world'
+    
+    CACHE = LOCAL_ASSESSMENT_ROOT + '/' + assessment + '.cache'
+
+    if os.path.exists(CACHE):
+        with open(CACHE) as f:
+            data = json.loads(f.read())
+    else:
+        data = {}
+    return data
+
+
+def save_cache(assessment, data):
+    CACHE = LOCAL_ASSESSMENT_ROOT + '/' + assessment + '.cache'
+
+    # now save data in case it was updated
+    with open(CACHE, 'wb') as f:
+        f.write(json.dumps(data))
 
 def init(args):
     pass
@@ -14,19 +61,95 @@ def update(args):
 
 
 def create(args):
+    '''creates the assessment directory structure with copies of assessment in each student directory
+    
+    does not assign the assessment. This is a separate command because it is slow. Sync is not reliable enough to create locally, so this command does everything remotely.
+    '''
+
     print 'running create with', args
 
-    
+    for assessment in args.assignment_label:
+        
+        data = load_cache(assessment)
+
+        for andrewid in ANDREWIDS:
+            path = '/'.join([BOX_ASSESSMENT_ROOT, 
+                             assessment, 
+                             '-'.join([andrewid, COURSE, assessment])])
+            if path not in data:
+                print('Creating {0}'.format(path))
+                data[path] = {}
+                d = create_folder(path)  # box
+
+                data[path]['folder_id'] = d['id'] # id for where this assessment is
+                
+                #print('Uploading')
+                assessment_file = LOCAL_PROBLEMS + '/{0}'.format(assessment)
+                if os.path.isfile(assessment_file):
+                    upload(assessment_file, d['id'], new_version=True)
+                elif os.path.isfile(assessment_file + '.py'):
+                    upload(assessment_file + '.py', d['id'], new_version=True)
+                elif os.path.isdir(assessment_file):
+                    raise Exception('Directory assignments are not supported yet')
+                save_cache(assessment, data)
+
 def assign(args):
-    print 'running assign with', args
+    '''Sets permissions on the assessment directory to editor.
+
+
+    '''
+            
+    for assessment in args.assignment_label:
+        data = load_cache(assessment)
+        for andrewid in ANDREWIDS:
+            path = '/'.join([BOX_ASSESSMENT_ROOT, assessment, '-'.join([andrewid, COURSE, assessment])])
+            print('Setting {0} to editor'.format(andrewid))
+            # this is the id of the folder to add collaboration to
+            id = data[path]['folder_id']
+
+            # we check if a collaboration exists
+            if 'collab_id' in data[path]:
+                # just to be sure, we edit the collaboration.
+                collab_id = data[path]['collab_id']
+                edit_collaboration(collab_id, role='editor')
+            else:
+                d = add_collaboration(id, andrewid + '@andrew.cmu.edu', 'editor')
+                data[path]['collab_id'] = d['id']
+
+            save_cache(assessment, data)
+
 
 
 def collect(args):
-    print 'running collect with', args
+    '''Set collaboration to viewer
+
+    '''
+    for assessment in args.assignment_label:
+        data = load_cache(assessment)
+        for andrewid in ANDREWIDS:
+            path = '/'.join([BOX_ASSESSMENT_ROOT, assessment, '-'.join([andrewid, COURSE, assessment])])
+            print('Setting {0} to viewer'.format(andrewid))
+
+            collab_id = data[path]['collab_id']
+            edit_collaboration(collab_id, role='viewer')
 
 
 def timed(args):
     print args
+    # assign the problem
+    assign(args)
+        
+    from box_course.timer import MyApp
+    app = MyApp(False)
+    app.set_time(args.time * 60)
+    app.set_warning_time(args.warning * 60)
+    app.set_buffer_time(args.buffer * 60)
+    
+    app.run()
+    app.MainLoop()
+        
+    # collect the problem
+    collect(args)
 
 
 def email(args):
@@ -86,12 +209,20 @@ if __name__ == '__main__':
 
     # for running a timed assessment
     p_timed = subparsers.add_parser('timed',
-                                   help='Run a timed assessment')
-    p_timed.add_argument('assessment')
+                                   help='Run a timed assignment')
+    p_timed.add_argument('assignment_label', nargs='+')
     p_timed.add_argument('-t','--time', 
-                         type=int, 
-                         help='Time to run assessmemnt in the minutes', 
+                         type=float, 
+                         help='Time to run assessmment in the minutes', 
                          default=20)
+    p_timed.add_argument('-w','--warning', 
+                         type=float, 
+                         help='Time in minutes to warn that the end is coming (timer is yellow)', 
+                         default=2)
+    p_timed.add_argument('-b','--buffer', 
+                         type=float, 
+                         help='Time (minutes) after its over to allow uploads', 
+                         default=1.0)
     p_timed.set_defaults(func=timed)
 
     # summary statistics of assignments or course
