@@ -31,7 +31,7 @@ import requests
 # be stored in box_course_config.py
 
 if os.path.exists('box_course_config.py'):
-    from box_course_config import *
+    execfile('box_course_config.py')
 else:
     BOX_TOKEN = os.environ.get('BOX_TOKEN', None)
 
