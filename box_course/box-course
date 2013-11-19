@@ -2,7 +2,7 @@
 '''
 command line utility for box course
 
-
+box-course -h for documentation
 '''
 # I am not sure why I can't import this.
 execfile('box_course_config.py')
@@ -10,27 +10,23 @@ execfile('box_course_config.py')
 import json, os
 
 # Now get course specific settings
-
 from box_course.box import *
 
-
-def get_andrewids():
-    # we get andrewids from the roster file
-    ANDREWIDS = []
-    with open(ROSTER) as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
+# we get andrewids from the roster file
+ANDREWIDS = []
+LASTNAMES, FIRSTNAMES = [], []
+with open(ROSTER) as f:
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
         
-            fields = line.split(',')
-            andrewid = fields[1]
-            ANDREWIDS.append(andrewid)
+        fields = line.split(',')
+        andrewid = fields[1]
+        LASTNAMES.append(fields[2])
+        FIRSTNAMES.append(fields[3])
+        ANDREWIDS.append(andrewid)
 
-    ANDREWIDS.sort()
-    return ANDREWIDS
-
-ANDREWIDS = get_andrewids()
 
 def load_cache(assessment):
     'assessment is a string of the problem being assessed, e.g. hello-world'
@@ -52,9 +48,52 @@ def save_cache(assessment, data):
     with open(CACHE, 'wb') as f:
         f.write(json.dumps(data))
 
-def init(args):
-    pass
 
+def init(args):
+    # Make the main root
+    d = create_folder(BOX_COURSE_ROOT)
+    rootid = d['id']
+    update_folder_information(rootid, description='''\
+This is the top level folder for the course. It is owned by the instructor, and not visible to anyone else.''')
+
+    ##################################################################
+    # Add the site folder which all students can view
+    print 'creating course site and setting students to be viewers'
+    d = create_folder('{0}-site'.format(COURSE), rootid)
+    update_folder_information(d['id'], description='''
+Put all information you want students to see here. All students on the roster will be able to view this folder.''')
+                              
+    # Add each student as a viewer to this folder
+    for andrewid in ANDREWIDS:
+        print 'made {0} a viewer'.format(andrewid)
+        add_collaboration(d['id'], andrewid + '@andrew.cmu.edu', 'viewer')
+
+    # and the TAs
+    for ta in TAS:
+        add_collaboration(d['id'], ta, 'viewer')
+
+    ##################################################################
+    # Create the folder where student work will go
+    d = create_folder('students', rootid)
+    update_folder_information(d['id'], description='''
+This folder will contain a folder for each student. Only you, the TAs and the student will be able to view their folder.''')
+    # and the TAs
+    for ta in TAS:
+        add_collaboration(d['id'], ta, 'editor')
+
+    # now add a student folder for each person, and make them an
+    # editor of the folder
+    for andrewid, firstname, lastname in zip(ANDREWIDS, FIRSTNAMES, LASTNAMES):
+        sd = create_folder(andrewid, d['id'])
+        update_folder_information(sd['id'], description='''{0} {1}
+This is your personal, private folder to put your assignments in. The instructor and TAs can see everything here. Other students cannot see what is in here. We will create a folder for each assignment that you will upload your completed assignment to.'''.format(firstname, lastname))
+        add_collaboration(sd['id'], andrewid + '@andrew.cmu.edu', 'viewer')
+        print 'created students/{0} and set {0} as viewer'.format(andrewid)
+     
+    # this is a folder for a database of problems that may be assigned
+    d = create_folder('problems', rootid)
+    update_folder_information(d['id'], description='''
+This is where you want to put your database of problems. Each file should contain a problem or problem set you want to assign to students. The file should be named as <<assessment>>.ext where assessment is a label you can refer to. ext is usually .py because the create function below assumes that is what it is.''')
 
 def update(args):
     pass
@@ -63,11 +102,9 @@ def update(args):
 def create(args):
     '''creates the assessment directory structure with copies of assessment in each student directory
     
-    does not assign the assessment. This is a separate command because it is slow. Sync is not reliable enough to create locally, so this command does everything remotely.
+    does not assign the assessment. This is a separate command because it is slow. Sync is not reliable enough to create locally, so this command does everything remotely using the box api.
     '''
-
-    print 'running create with', args
-
+    
     for assessment in args.assignment_label:
         
         data = load_cache(assessment)
@@ -76,28 +113,29 @@ def create(args):
             path = '/'.join([BOX_ASSESSMENT_ROOT, 
                              assessment, 
                              '-'.join([andrewid, COURSE, assessment])])
-            if path not in data:
+            if (path not in data) or args.force:
                 print('Creating {0}'.format(path))
                 data[path] = {}
                 d = create_folder(path)  # box
 
                 data[path]['folder_id'] = d['id'] # id for where this assessment is
+
+                if args.description:
+                    update_folder_information(d['id'], description=args.description)
                 
-                #print('Uploading')
                 assessment_file = LOCAL_PROBLEMS + '/{0}'.format(assessment)
                 if os.path.isfile(assessment_file):
                     upload(assessment_file, d['id'], new_version=True)
                 elif os.path.isfile(assessment_file + '.py'):
                     upload(assessment_file + '.py', d['id'], new_version=True)
                 elif os.path.isdir(assessment_file):
-                    raise Exception('Directory assignments are not supported yet')
+                    for f in os.listdir(assessment_file):
+                        upload(os.path.join(assessment_file, f), d['id'], new_version=True)
                 save_cache(assessment, data)
 
+
 def assign(args):
-    '''Sets permissions on the assessment directory to editor.
-
-
-    '''
+    '''Sets permissions on the assessment directory to editor.'''
             
     for assessment in args.assignment_label:
         data = load_cache(assessment)
@@ -117,7 +155,6 @@ def assign(args):
                 data[path]['collab_id'] = d['id']
 
             save_cache(assessment, data)
-
 
 
 def collect(args):
@@ -193,6 +230,7 @@ if __name__ == '__main__':
     p_create = subparsers.add_parser('create', help='create an assignment')
     p_create.add_argument('assignment_label', nargs='+')
     p_create.add_argument('-d', '--description', help='description of assignment')
+    p_create.add_argument('-f', '--force', action='store_true', help='overwrite existing directories')
     p_create.set_defaults(func=create)
 
     # for assigning an assignment
