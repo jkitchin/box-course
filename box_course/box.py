@@ -26,17 +26,16 @@ import json, os, time
 
 import requests
 
-# We need to know where the BOX_TOKEN is. There are two options.
-# You can store an environment variable that reads it or it can 
-# be stored in box_course_config.py
+# We need to know where the BOX_TOKEN is. There are two options.  You
+# can store an environment variable that reads it or it can be stored
+# in box_course_config.py. The environment variable lets you use box
+# outside of the course.
 
-if os.path.exists('box_course_config.py'):
-    execfile('box_course_config.py')
-else:
-    BOX_TOKEN = os.environ.get('BOX_TOKEN', None)
+from box_course import *
 
-if not BOX_TOKEN:
-    raise Exception('No BOX_TOKEN found')
+if 'BOX_TOKEN' in os.environ:
+    BOX_TOKEN = os.environ.get('BOX_TOKEN')
+
 
 ##### From here down should be totally general
 API_URI = 'https://api.box.com/2.0'
