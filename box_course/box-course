@@ -4,13 +4,13 @@ command line utility for box course
 
 box-course -h for documentation
 '''
-# I am not sure why I can't import this.
-execfile('box_course_config.py')
 
 import json, os
 
-# Now get course specific settings
+from box_course import *
 from box_course.box import *
+
+print BOX_TOKEN
 
 # we get andrewids from the roster file
 ANDREWIDS = []
@@ -28,25 +28,35 @@ with open(ROSTER) as f:
         ANDREWIDS.append(andrewid)
 
 
-def load_cache(assessment):
-    'assessment is a string of the problem being assessed, e.g. hello-world'
-    
-    CACHE = LOCAL_ASSESSMENT_ROOT + '/' + assessment + '.cache'
+# this is where we store everything we need to remember
+COURSE_CACHE = LOCAL_COURSE_ROOT + '/' + COURSE + '.json'
 
-    if os.path.exists(CACHE):
-        with open(CACHE) as f:
+if os.path.exists(COURSE_CACHE):
+    with open(COURSE_CACHE) as f:
+        data = json.loads(f.read())
+else:
+    data = {}
+
+if 'ASSIGNMENTS' not in data:
+    data['ASSIGNMENTS'] = {}
+
+    with open(COURSE_CACHE, 'wb') as f:
+        f.write(json.dumps(data, sort_keys=True, indent=4))
+
+
+def load_cache():
+    if os.path.exists(COURSE_CACHE):
+        with open(COURSE_CACHE) as f:
             data = json.loads(f.read())
     else:
         data = {}
     return data
 
 
-def save_cache(assessment, data):
-    CACHE = LOCAL_ASSESSMENT_ROOT + '/' + assessment + '.cache'
-
+def save_cache(data):
     # now save data in case it was updated
-    with open(CACHE, 'wb') as f:
-        f.write(json.dumps(data))
+    with open(COURSE_CACHE, 'wb') as f:
+        f.write(json.dumps(data, sort_keys=True, indent=4))
 
 
 def init(args):
@@ -104,24 +114,26 @@ def create(args):
     
     does not assign the assessment. This is a separate command because it is slow. Sync is not reliable enough to create locally, so this command does everything remotely using the box api.
     '''
-    
+    data = load_cache()
+
     for assessment in args.assignment_label:
-        
-        data = load_cache(assessment)
+        if assessment not in data['ASSIGNMENTS']:
+            data['ASSIGNMENTS'][assessment] = {}
 
         for andrewid in ANDREWIDS:
             path = '/'.join([BOX_ASSESSMENT_ROOT, 
                              assessment, 
                              '-'.join([andrewid, COURSE, assessment])])
-            if (path not in data) or args.force:
+            if (path not in data['ASSIGNMENTS'][assessment]) or args.force:
                 print('Creating {0}'.format(path))
-                data[path] = {}
+                data['ASSIGNMENTS'][assessment][path] = {}
                 d = create_folder(path)  # box
 
-                data[path]['folder_id'] = d['id'] # id for where this assessment is
+                data['ASSIGNMENTS'][assessment][path]['folder_id'] = d['id'] 
 
                 if args.description:
-                    update_folder_information(d['id'], description=args.description)
+                    update_folder_information(d['id'],
+                                              description=args.description)
                 
                 assessment_file = LOCAL_PROBLEMS + '/{0}'.format(assessment)
                 if os.path.isfile(assessment_file):
@@ -131,43 +143,52 @@ def create(args):
                 elif os.path.isdir(assessment_file):
                     for f in os.listdir(assessment_file):
                         upload(os.path.join(assessment_file, f), d['id'], new_version=True)
-                save_cache(assessment, data)
+                save_cache(data)
 
 
 def assign(args):
-    '''Sets permissions on the assessment directory to editor.'''
-            
+    '''Sets permissions on the assessment directory to editor.
+
+    adds the assignment to the assignments.json file.'''
+    data = load_cache()
     for assessment in args.assignment_label:
-        data = load_cache(assessment)
         for andrewid in ANDREWIDS:
+            if assessment not in data['ASSIGNMENTS']:
+                create(args)
+
+            data['ASSIGNMENTS'][assessment]['category'] = args.category
+            data['ASSIGNMENTS'][assessment]['points'] = args.points
+            data['ASSIGNMENTS'][assessment]['due'] = args.due_date
+                                
+            
             path = '/'.join([BOX_ASSESSMENT_ROOT, assessment, '-'.join([andrewid, COURSE, assessment])])
             print('Setting {0} to editor'.format(andrewid))
             # this is the id of the folder to add collaboration to
-            id = data[path]['folder_id']
+            id = data['ASSIGNMENTS'][assessment][path]['folder_id']
 
             # we check if a collaboration exists
-            if 'collab_id' in data[path]:
+            if 'collab_id' in data['ASSIGNMENTS'][assessment][path]:
                 # just to be sure, we edit the collaboration.
-                collab_id = data[path]['collab_id']
+                collab_id = data['ASSIGNMENTS'][assessment][path]['collab_id']
                 edit_collaboration(collab_id, role='editor')
             else:
                 d = add_collaboration(id, andrewid + '@andrew.cmu.edu', 'editor')
-                data[path]['collab_id'] = d['id']
+                data['ASSIGNMENTS'][assessment][path]['collab_id'] = d['id']
 
-            save_cache(assessment, data)
+            save_cache(data)
 
 
 def collect(args):
     '''Set collaboration to viewer
 
     '''
+    data = load_cache()
     for assessment in args.assignment_label:
-        data = load_cache(assessment)
         for andrewid in ANDREWIDS:
             path = '/'.join([BOX_ASSESSMENT_ROOT, assessment, '-'.join([andrewid, COURSE, assessment])])
             print('Setting {0} to viewer'.format(andrewid))
 
-            collab_id = data[path]['collab_id']
+            collab_id = data['ASSIGNMENTS'][assessment][path]['collab_id']
             edit_collaboration(collab_id, role='viewer')
 
 
@@ -194,7 +215,14 @@ def email(args):
 
 
 def update_grade_report(args):
-    print 'updating grade report with ', args
+    andrewids = args.andrewids
+    if andrewids[0] == 'all':
+        andrewids = ANDREWIDS
+
+    for andrewid in andrewids:
+        for assignment, points, category, duedate in ASSIGNMENTS:
+            print andrewid, assignment
+    
 
 
 def emacs(args):
@@ -210,6 +238,22 @@ def summarize(args):
     --overall semester grades
     '''
     pass
+
+def refresh(args):
+    '''get new tokens from box.com'''
+    refresh_tokens()
+
+def config(args):
+    '''prints the config file.'''
+    dir, last = os.getcwd(), True
+    while last:
+        dir, last = os.path.split(dir)
+        cfile = os.path.join(dir, 'box_course_config.py')
+        if os.path.exists(cfile):
+            with open(cfile) as f:
+                s = f.readlines()
+            print ''.join(s)
+
 
 
 if __name__ == '__main__':
@@ -237,6 +281,9 @@ if __name__ == '__main__':
     p_assign = subparsers.add_parser('assign', 
                                      help='assign an assignment')
     p_assign.add_argument('assignment_label', nargs='+')
+    p_assign.add_argument('-c', '--category', help='Category the assignment is in')
+    p_assign.add_argument('-p', '--points', help='How many points the assignment is worth')
+    p_assign.add_argument('-d', '--due-date', help='when the assignment is due 02M-02D-04Y, e.g. 11-12-2013')
     p_assign.set_defaults(func=assign)
 
     # for collecting an assignment
@@ -288,6 +335,13 @@ if __name__ == '__main__':
     p_emacs.add_argument('andrewids', nargs='+')
     p_emacs.set_defaults(func=emacs)
     
+    p_refresh = subparsers.add_parser('authenticate', 
+                                    help='refreshes your tokens')
+    p_refresh.set_defaults(func=refresh)
+
+    p_config = subparsers.add_parser('config', 
+                                    help='print your configuration')
+    p_config .set_defaults(func=config)
 
     args = parser.parse_args()
     args.func(args)
