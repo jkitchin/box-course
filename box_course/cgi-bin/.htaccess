@@ -1,0 +1,3 @@
+SetEnv BOX_COURSE_CLIENT_ID "your-id-here"
+SetEnv BOX_COURSE_CLIENT_SECRET "your-secret-key-here"
+SetEnv BOX_COURSE_REDIRECT_URI "https://www.contrib.andrew.cmu.edu/~jkitchin/box-course-authenticate.php"
