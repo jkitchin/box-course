@@ -3,9 +3,7 @@
 // You have to use your own credentials from box, and set the redirect uri 
 // SetEnv BOX_COURSE_CLIENT_ID "your-client-id-here"
 // SetEnv BOX_COURSE_CLIENT_SECRET "your-secret-key-here"
-// SetEnv BOX_COURSE_REDIRECT_URI "https://www.contrib.andrew.cmu.edu/~jkitchin/box-course-authenticate.php"
-// copy box-course-authenticate.php to ~/www/box-course-authenticate.php on unix.andrew.cmu.edu. run chmod +x box-course-authenticate.php to make it executable. 
-// Edit your box application in the developer site to use the redirect_uri shown above.
+// SetEnv BOX_COURSE_REDIRECT_URI "http://www.contrib.andrew.cmu.edu/~jkitchin/box-course-authenticate.php"
 
 // READ your stuff in here.
 $htaccess = file('.htaccess');
@@ -39,7 +37,7 @@ if($_GET['code'])
 
 
     $post = 'grant_type=authorization_code&code=' . $code . '&client_id=' . $BOX_COURSE_CLIENT_ID . '&client_secret=' . $BOX_COURSE_CLIENT_SECRET . '&redirect_uri=' . $BOX_COURSE_REDIRECT_URI;
-    echo "one";
+
     $session = curl_init($token_uri);
     curl_setopt($session, CURLOPT_URL, $token_uri);
     curl_setopt($session, CURLOPT_HEADER, 0);
@@ -56,6 +54,7 @@ if($_GET['code'])
     $json = json_decode($result, true);
     $json['client_id'] = $BOX_COURSE_CLIENT_ID;
     $json['client_secret'] = $BOX_COURSE_CLIENT_SECRET;
+    $json['time_acquired'] = time();
     echo json_encode($json);
 }
 
