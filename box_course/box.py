@@ -379,7 +379,8 @@ def add_collaboration(id, login, role):
 
     id should be a folder id
     login is the email address the person logs in with
-    role is editor, viewer, etc...
+    role is  editor, viewer, previewer, uploader, previewer-uploader, 
+    viewer-uploader, co-owner
 
     http://developers.box.com/docs/#collaborations-add-a-collaboration
     '''
@@ -444,7 +445,14 @@ def delete_collaboration(collab_id):
     uri = '/collaborations/{0}'.format(collab_id)
     r = requests.delete(API_URI + uri,
                         headers=headers)
-    return json.loads(r.text)  
+    # the documentation suggests an empty 200 response, but it looks like I get a 204
+    if r.status_code == 204:
+        return {}
+    else:
+        print r
+        raise Exception('Could not delete {0}'.format(collab_id))
+
+
 
 
 def get_pending_collaborations(status='pending'):
