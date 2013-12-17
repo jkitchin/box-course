@@ -74,23 +74,26 @@ class MyTimer(wx.Frame):
 
 
      def OnTimer(self, event):
-          print self.countdown, self.buffer_time
+          
+          min_remaining = self.countdown/60.
+          sec_remaining = self.countdown % 60
+
           if self.countdown >= self.warning_time:
                self.progress.SetValue(self.minutesPassed * (100. / self.time))
-               self.status.SetLabel('%1.2f minutes remaining.' % (self.countdown/60.))              
+               self.status.SetLabel('%d:%02d remaining.' % (min_remaining, sec_remaining)              )
                self.minutesPassed += 1.
                self.countdown -= 1.
 
           elif self.countdown < self.warning_time and self.countdown >= 60.0:
                self.progress.SetValue(self.minutesPassed * (100. / self.time))
-               self.status.SetLabel('%1.2f minutes remaining.' % (self.countdown/60.))
+               self.status.SetLabel('%d:%02d remaining.' % (min_remaining, sec_remaining))  
                self.status.SetBackgroundColour('yellow')
                self.minutesPassed += 1.
                self.countdown -= 1.
      
           elif self.countdown <  60.0 and self.countdown >= 0:
                self.progress.SetValue(self.minutesPassed * (100. / self.time))
-               self.status.SetLabel('%1.2f minutes remaining. \nTime is running out. Start uploading now!' % (self.countdown/60.))
+               self.status.SetLabel('%d:%02d remaining. \nTime is running out. Start uploading now!' % (min_remaining, sec_remaining))
                self.status.SetBackgroundColour('red')
                self.minutesPassed += 1.
                self.countdown -= 1.
@@ -102,7 +105,7 @@ class MyTimer(wx.Frame):
           # this is the buffer step
           else:
                self.progress.SetValue(self.minutesPassed * (100. / self.time))
-               self.status.SetLabel('The exam is over!')
+               self.status.SetLabel('The assignment is over!')
                self.status.SetBackgroundColour('red')
                winsound.PlaySound('ding.wav',winsound.SND_FILENAME)
                self.countdown -= 1.
@@ -135,6 +138,9 @@ class MyApp(wx.App):
 
 if __name__ == '__main__':
      app = MyApp(False)
+     app.set_time(2*60)
+     app.set_warning_time(1.5*60)
+     app.set_buffer_time(0.1*60)
      app.MainLoop()
 
 
