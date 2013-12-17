@@ -130,6 +130,8 @@ def get_item(name, parent_id=0):
 
     name may be a path'''
     id = parent_id
+    if name.startswith('/'):
+        name = name[1:]
     for item in name.split('/'):
         uri = '/folders/{0}/items'.format(id)
         headers = {"Authorization": "Bearer %s" % get_access_token()}
@@ -489,8 +491,54 @@ def create_task(id, message, due_at=None, action='review'):
     return json.loads(r.text)
 
 
+def update_task(id, message=None, due_at=None, action='review'):
+    '''
+    update the properties of a task
+
+    http://developers.box.com/docs/#tasks-update-a-task
+    '''
+    headers = {"Authorization": "Bearer %s" % get_access_token()}
+    uri = '/tasks/{0}'.format(id)
+    data = {action:action}
+    if message:
+        data['message'] = message
+    if due_at:
+        data['due_at'] = due_at
+    
+    r = requests.put(API_URI + uri,
+                     headers=headers,
+                     data=json.dumps(data))
+    return json.loads(r.text)    
+
+def delete_task(id):
+    '''
+    delete a task by its id
+
+    http://developers.box.com/docs/#tasks-delete-a-task
+    '''
+    headers = {"Authorization": "Bearer %s" % get_access_token()}
+    uri = '/tasks/{0}'.format(id)
+    r = requests.delete(API_URI + uri, headers=headers)
+    if r.status_code == 204:
+        return {}
+    else:
+        raise Exception('Could not delete {0}'.format(id))
+
+def get_task_assignments(id):
+    '''
+    gets all the assignments for a task id
+
+    http://developers.box.com/docs/#tasks-get-the-assignments-for-a-task
+    '''
+    headers = {"Authorization": "Bearer %s" % get_access_token()}
+    uri = '/tasks/{0}/assignments'.format(id)
+    r = requests.get(API_URI + uri, headers=headers)
+    return json.loads(r.text)
+
 def assign_task(task_id, login):
     '''
+    assign a task to a login
+
     http://developers.box.com/docs/#tasks-create-a-task-assignment
     '''
 
@@ -506,4 +554,40 @@ def assign_task(task_id, login):
                       data=json.dumps(data))
     
     return json.loads(r.text)
-    
+
+create_task_assignment = assign_task # an alias for consistency
+
+   
+def delete_task_assignment(id):
+    '''
+    http://developers.box.com/docs/#tasks-delete-a-task-assignment
+    '''
+    headers = {"Authorization": "Bearer %s" % get_access_token()}
+    uri = '/task_assignments/{0}'.format(id)
+    r = requests.delete(API_URI + uri, headers=headers)
+    if r.status_code == 204:
+        return {}
+    else:
+        print r
+        raise Exception('Could not delete {0}'.format(id))
+
+
+def update_task_assignment(id, message, resolution_state=None):
+    '''
+    http://developers.box.com/docs/#tasks-update-a-task-assignment
+    '''
+
+    if resolution_state not in [None, 'completed','incomplete',
+                                'approved','rejected']:
+        raise Exception('invalid resolution state')
+
+    headers = {"Authorization": "Bearer %s" % get_access_token()}
+    uri = '/task_assignments/{0}'.format(id)
+    data = {'message':message}
+    if resolution_state:
+        data['resolution_state'] = resolution_state
+
+    r = requests.put(API_URI + uri,
+                     headers=headers,
+                     data=json.dumps(data))
+    return json.loads(r.text)
