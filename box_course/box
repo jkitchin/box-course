@@ -1,0 +1,197 @@
+#!python
+'''
+command line utility for box course
+
+box-course -h for documentation
+'''
+
+import json, os
+import dateutil 
+
+from box_course import *
+from box_course.box import *
+
+BOX_SYNC_ROOT = os.path.normpath(os.path.expanduser('~/Documents/My Box Files'))
+
+def collaboration(args):
+    '''
+    creates/modifies/deletes collaboration in cwd
+
+    data is stored in .box-json
+    {"login":{"collab_id":id, "role":role}}
+    '''
+
+    if os.path.exists('.box-json'):
+        with open('.box-json', 'rb') as f:
+            data = json.loads(f.read())
+    else:
+        data = {}
+
+    cwd = os.getcwd()
+
+    for login in args.logins:
+        if args.remove:
+            if login in data:
+                delete_collaboration(data[login]['collab_id'])
+                del data[login]
+                if data:
+                    with open('.box-json', 'wb') as f:
+                        f.write(json.dumps(data))
+                else:
+                    os.unlink('.box-json')
+                print 'removed {0} as {1}'.format(login, args.role)
+            else:
+                print 'No record of {0} as {1}'.format(login, args.role)
+        else:
+            if login in data:
+                edit_collaboration(data[login]['collab_id'], args.role)
+                data[login]['role'] = args.role
+            else:
+                # get id of cwd
+                cwd = os.getcwd()
+                # this is how I get the path on box.
+                # This probably is not cross-platform. I have to replace the slashes too.
+                boxdir = cwd.replace(BOX_SYNC_ROOT, '')                
+                entry = get_item(boxdir.replace('\\','/'))  
+                
+                r = add_collaboration(entry['id'], login, args.role)
+                
+                data[login] = {}
+                data[login]['collab_id'] = r['id']
+                data[login]['role'] = args.role
+            
+            # now update the data file
+            with open('.box-json', 'wb') as f:
+                f.write(json.dumps(data))
+            
+            print 'added/edited {0} as {1}'.format(login, args.role)
+
+def task(args):
+    '''creates and assigns a task on a file to a person.
+
+    stores data in .box-json
+
+    {file:{id:file_id, task_id:{assigned_to:login}}}
+    '''
+
+    from dateutil import parser
+    from datetime import datetime
+
+    if os.path.exists('.box-json'):
+        with open('.box-json', 'rb') as f:
+            data = json.loads(f.read())
+    else:
+        data = {}
+
+    # parse due_at if it is provided to get into standard form.
+    if args.due_at:
+        ts = parser.parse(args.due_at)
+        due_at = '{0}-{1}-{2}T{3:02d}:{4:02d}:{5:02d}-05:00'.format(ts.year, ts.month, ts.day, 
+                                                                    ts.hour, ts.minute, ts.second)
+    else:
+        due_at = None
+
+    # this is probably a user command
+    if args.update_assignment:
+        print 'updating assigment'
+        taid = args.update_assignment
+        r = update_task_assignment(taid, args.message)
+        print r
+        return
+
+    # this is where I update the message/due date
+    if args.update_task:
+        tid = args.update_task
+        r = update_task(tid, args.message, due_at)
+        print r
+        return
+
+    # first, get id of the file.
+    abspath = os.path.abspath(args.file)
+    boxfile = abspath.replace(BOX_SYNC_ROOT, '')   
+    
+    if not os.path.isfile(abspath):        
+        raise Exception('You can only assign a task to an existing file')
+
+    if boxfile in data:
+        id = data[boxfile]['file-id']
+    else:
+        # get the id for the file
+        entry = get_item(boxfile.replace('\\','/'))
+        id = entry['id']
+        data[boxfile] = {}
+        data[boxfile]['file-id'] = id
+        with open('.box-json', 'wb') as f:
+            f.write(json.dumps(data))
+
+    # first create the task and store the id
+    r = create_task(id, message=args.message, due_at=due_at)
+    tid = r['id']
+    print 'task-id = ',r
+    data[boxfile][tid] = {}
+    data[boxfile][tid]['message'] = args.message
+    data[boxfile][tid]['due_at'] = due_at
+    data[boxfile][tid]['assignments']={}
+    with open('.box-json', 'wb') as f:
+        f.write(json.dumps(data))
+
+    # now assign the task
+    for login in args.logins:
+        r = assign_task(tid, login)
+        taid = r['id']
+        data[boxfile][tid]['assignments'][taid] = login
+        print 'assigned {0} to {1}'.format(taid, login)
+        with open('.box-json', 'wb') as f:
+            f.write(json.dumps(data))
+
+
+    
+
+
+
+def refresh(args):
+    '''get new tokens from box.com'''
+    refresh_tokens()
+
+
+
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(prog='box')
+    
+    #http://docs.python.org/2/library/argparse.html#sub-commands
+    subparsers = parser.add_subparsers(help='help for sub-commands')
+
+
+    # for creating/editing a collaboration
+    p_collab = subparsers.add_parser('collaborate', help='create a collaboration in cwd')
+    p_collab.add_argument('logins', nargs='+')
+    p_collab.add_argument('-r', '--role', 
+                          default='viewer',
+                          help='role, e.g. editor, viewer')
+    p_collab.add_argument('--remove', 
+                          action='store_true',
+                          help='remove collaboration for logins')
+    p_collab.set_defaults(func=collaboration)
+
+    # for assigning an task
+    p_task = subparsers.add_parser('task', help='create a task')
+    p_task.add_argument('file', nargs='?')
+    p_task.add_argument('logins', nargs='*')
+    p_task.add_argument('-m', '--message', help='message for task')
+    p_task.add_argument('-d','--due-at', help='''Due date. try to use a reasonable format. some examples are:
+Dec 13 2103 9am''')
+
+    p_task.add_argument('-u','--update-assignment', help='update a task assignment')
+    p_task.add_argument('-U','--update-task', help='update a task')
+    p_task.set_defaults(func=task)
+
+    ##################################################################
+    p_refresh = subparsers.add_parser('authenticate', 
+                                    help='refreshes your tokens')
+    p_refresh.set_defaults(func=refresh)
+
+    args = parser.parse_args()
+    args.func(args)
