@@ -10,8 +10,6 @@ import json, os
 from box_course import *
 from box_course.box import *
 
-print BOX_TOKEN
-
 # we get andrewids from the roster file
 ANDREWIDS = []
 LASTNAMES, FIRSTNAMES = [], []
@@ -54,7 +52,6 @@ def load_cache():
 
 
 def save_cache(data):
-    # now save data in case it was updated
     with open(COURSE_CACHE, 'wb') as f:
         f.write(json.dumps(data, sort_keys=True, indent=4))
 
@@ -108,17 +105,28 @@ This is where you want to put your database of problems. Each file should contai
 def update(args):
     pass
 
-
+# TODO this is not the right path structure
+# assessments/andrewid-06-625/assignment-file
 def create(args):
-    '''creates the assessment directory structure with copies of assessment in each student directory
+    '''creates the assessment directory structure with copies of
+assessment in each student directory
     
-    does not assign the assessment. This is a separate command because it is slow. Sync is not reliable enough to create locally, so this command does everything remotely using the box api.
+    does not assign the assessment. This is a separate command because
+    it is slow. Sync is not reliable enough to create locally, and get
+    the files to box.com where students can see them right away. so
+    this command does everything remotely using the box api. It also
+    stores information locally about the assignment.
+
     '''
     data = load_cache()
 
     for assessment in args.assignment_label:
         if assessment not in data['ASSIGNMENTS']:
             data['ASSIGNMENTS'][assessment] = {}
+            
+        data['ASSIGNMENTS'][assessment]['category'] = args.category
+        data['ASSIGNMENTS'][assessment]['points'] = args.points
+        data['ASSIGNMENTS'][assessment]['due'] = args.due_date
 
         for andrewid in ANDREWIDS:
             path = '/'.join([BOX_ASSESSMENT_ROOT, 
@@ -131,21 +139,30 @@ def create(args):
 
                 data['ASSIGNMENTS'][assessment][path]['folder_id'] = d['id'] 
 
-                if args.description:
+                if args.message:
                     update_folder_information(d['id'],
-                                              description=args.description)
+                                              description=args.message)
                 
                 assessment_file = LOCAL_PROBLEMS + '/{0}'.format(assessment)
+                print assessment_file, 
                 if os.path.isfile(assessment_file):
+                    print 'found a file, uploading ',assessment_file
                     upload(assessment_file, d['id'], new_version=True)
                 elif os.path.isfile(assessment_file + '.py'):
+                    print 'found a py file, uploading ',assessment_file
                     upload(assessment_file + '.py', d['id'], new_version=True)
                 elif os.path.isdir(assessment_file):
+                    print 'found a dir, uploading contents'
                     for f in os.listdir(assessment_file):
+                        print 'uploading ',f
                         upload(os.path.join(assessment_file, f), d['id'], new_version=True)
+                else:
+                    raise Exception('Cannot find {0}'.format(assessment_file))
+
                 save_cache(data)
 
-
+# TODO this is not the right path structure
+# assessments/andrewid-06-625/assignment-file
 def assign(args):
     '''Sets permissions on the assessment directory to editor.
 
@@ -154,13 +171,8 @@ def assign(args):
     for assessment in args.assignment_label:
         for andrewid in ANDREWIDS:
             if assessment not in data['ASSIGNMENTS']:
-                create(args)
-
-            data['ASSIGNMENTS'][assessment]['category'] = args.category
-            data['ASSIGNMENTS'][assessment]['points'] = args.points
-            data['ASSIGNMENTS'][assessment]['due'] = args.due_date
-                                
-            
+                raise Exception('Please create this assignment first')
+                                        
             path = '/'.join([BOX_ASSESSMENT_ROOT, assessment, '-'.join([andrewid, COURSE, assessment])])
             print('Setting {0} to editor'.format(andrewid))
             # this is the id of the folder to add collaboration to
@@ -177,7 +189,8 @@ def assign(args):
 
             save_cache(data)
 
-
+# TODO this is not the right path structure
+# assessments/andrewid-06-625/assignment-file
 def collect(args):
     '''Set collaboration to viewer
 
@@ -209,6 +222,33 @@ def timed(args):
     # collect the problem
     collect(args)
 
+def grade(args):
+    '''Depending on the args, this adds or removes a rubric file'''
+    print 'running grade with ', args
+
+    for assignment in assignment_label:
+        for andrewid in ANDREWIDS:
+            # get path to file, check for existence.
+
+            # handle the rubric
+            if args.rm:
+                print 'removing rubric'
+            else:
+                rubricfile = 'rubrics/{0}.pdf'.format(args.add)
+                print 'adding ', rubricfile
+
+            # decide what to do here either make link for emacs or open file
+            if args.format == 'emacs':
+                print 'making an orglink'
+            elif args.format == 'open':
+                print 'opening the pdf for grading'
+            else:
+                raise Exception('Unknown format option. emacs or open.')
+
+
+            if args.update_grade_report:
+                print 'updating grade report for ', andrewid
+
 
 def email(args):
     print 'running email with', args
@@ -223,12 +263,6 @@ def update_grade_report(args):
         for assignment, points, category, duedate in ASSIGNMENTS:
             print andrewid, assignment
     
-
-
-def emacs(args):
-    '''prints org-mode lists and links'''
-    print args
-    pass
 
 
 def summarize(args):
@@ -255,6 +289,13 @@ def config(args):
             print ''.join(s)
 
 
+def test(args):
+    print check_tokens()
+
+    d = get_item(COURSE)
+    print d
+
+
 
 if __name__ == '__main__':
     import argparse
@@ -273,17 +314,22 @@ if __name__ == '__main__':
     # for creating an assignment
     p_create = subparsers.add_parser('create', help='create an assignment')
     p_create.add_argument('assignment_label', nargs='+')
-    p_create.add_argument('-d', '--description', help='description of assignment')
-    p_create.add_argument('-f', '--force', action='store_true', help='overwrite existing directories')
+    p_create.add_argument('-c', '--category', 
+                          help='Category the assignment is in')
+    p_create.add_argument('-p', '--points', 
+                          help='How many points the assignment is worth')
+    p_create.add_argument('-d', '--due-date', 
+                          help='when the assignment is due 02M-02D-04Y, e.g. 11-12-2013')
+    p_create.add_argument('-m', '--message', 
+                          help='description of assignment')
+    p_create.add_argument('-f', '--force', action='store_true', 
+                          help='overwrite existing directories')
     p_create.set_defaults(func=create)
 
     # for assigning an assignment
     p_assign = subparsers.add_parser('assign', 
                                      help='assign an assignment')
     p_assign.add_argument('assignment_label', nargs='+')
-    p_assign.add_argument('-c', '--category', help='Category the assignment is in')
-    p_assign.add_argument('-p', '--points', help='How many points the assignment is worth')
-    p_assign.add_argument('-d', '--due-date', help='when the assignment is due 02M-02D-04Y, e.g. 11-12-2013')
     p_assign.set_defaults(func=assign)
 
     # for collecting an assignment
@@ -310,10 +356,31 @@ if __name__ == '__main__':
                          default=1.0)
     p_timed.set_defaults(func=timed)
 
+    # for adding rubric and making links for grading
+    p_grade = subparsers.add_parser('grade',
+                                    help='add rubric if desired, make list of org links')
+    p_grade.add_argument('assignment_label', nargs='+')
+    p_grade.add_argument('-f','--format',
+                         help='"emacs" to make org-links or "open" to just open files for grading',
+                         default='emacs')
+
+    ggroup = p_grade.add_mutually_exclusive_group()
+    ggroup.add_argument('-a','--add',
+                        default='default',
+                         help='add rubrics/rubric-label.pdf to assignments')
+    ggroup.add_argument('-r','--rm', action='store_true',
+                         help='remove rubrics stored on assignments')
+
+    p_grade.add_argument('-u', '--update-grade-report',
+                         action='store_true',
+                         help='update the grade report after you are done')
+
+    p_grade.set_defaults(func=grade)
+
     # summary statistics of assignments or course
     p_summarize = subparsers.add_parser('summarize',
                                         help='print summary statistics')
-    p_summarize.add_argument('assessment', nargs='+')
+    p_summarize.add_argument('assignment_label', nargs='+')
     p_summarize.set_defaults(func=summarize)
 
     # for sending email to users
@@ -327,14 +394,8 @@ if __name__ == '__main__':
                                                   help='update grade reports')
     p_update_grade_report.add_argument('andrewids', nargs='+')
     p_update_grade_report.set_defaults(func=update_grade_report)
-
-    # print lists for org-mode in emacs
-    p_emacs = subparsers.add_parser('emacs', 
-                                    help='prints list of links for emacs org-mode')
-    p_emacs.add_argument('assignment')
-    p_emacs.add_argument('andrewids', nargs='+')
-    p_emacs.set_defaults(func=emacs)
     
+    ##################################################################
     p_refresh = subparsers.add_parser('authenticate', 
                                     help='refreshes your tokens')
     p_refresh.set_defaults(func=refresh)
@@ -342,6 +403,11 @@ if __name__ == '__main__':
     p_config = subparsers.add_parser('config', 
                                     help='print your configuration')
     p_config .set_defaults(func=config)
+
+
+    p_test = subparsers.add_parser('test', 
+                                    help='test by listing course from box')
+    p_test.set_defaults(func=test)
 
     args = parser.parse_args()
     args.func(args)
