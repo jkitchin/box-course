@@ -53,16 +53,42 @@ def add_rubric(pdffile, rubricfile, force=False):
     set_info(pdffile, 'rubric', src2)
     return True
 
-                       
+def rm_rubric(pdffile):
+    '''remove the pages associated with the rubric stored in the pdf
 
+    '''
+    # if there is a rubric it is stored here
+    rubricfile = get_info(pdffile, 'rubric')
+    #print rubricfile, os.path.exists(rubricfile)
+    if rubricfile == '':
+        # no rubric stored.
+        print 'no rubric found'
+        return True
+
+    # get number of pages in pdffile 
+    pddoc1 = pddoc
+    pddoc1.Open(os.path.abspath(pdffile))
+    N1 = pddoc1.GetNumPages()
+
+    pddoc2 = Dispatch("AcroExch.PDDoc")
+    pddoc2.Open(os.path.abspath(rubricfile))
+    N2 = pddoc2.GetNumPages()
+
+    #print N1, N2
+    pddoc1.DeletePages(N1 - N2, N1 - 1)
+    set_info(pdffile, 'rubric', '')
+    pddoc1.Save(1, os.path.abspath(pdffile))
+    pddoc1.Close()
+    pddoc2.Close()
+    return True
 
 if __name__ == '__main__':
-    print get_info('tmp.pdf', 'Grade')
-    set_info('tmp.pdf', 'Grade', 'A')
-    set_info('tmp.pdf', 'Grade3', 'AAsdfadjio')
-    print get_info('tmp.pdf', 'Grade')
-    print get_info('tmp.pdf', 'Grade6')
+    print get_info('examples/tmp.pdf', 'Grade')
+    #set_info('tmp.pdf', 'Grade', 'A')
+    #set_info('tmp.pdf', 'Grade3', 'AAsdfadjio')
+    #print get_info('tmp.pdf', 'Grade')
+    #print get_info('tmp.pdf', 'Grade6')
 
 
-    add_rubric('tmp.pdf', 'rubric.pdf')
+    #add_rubric('tmp.pdf', 'rubric.pdf')
     
