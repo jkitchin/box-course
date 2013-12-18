@@ -153,8 +153,7 @@ def task(args):
         return
 
     # first, get id of the file.
-    abspath = os.path.abspath(args.file)
-    boxfile = abspath.replace(BOX_SYNC_ROOT, '')   
+    boxfile = get_box_path(args.file)
     
     if not os.path.isfile(abspath):        
         raise Exception('You can only assign a task to an existing file')
@@ -163,7 +162,7 @@ def task(args):
         id = data[boxfile]['file-id']
     else:
         # get the id for the file
-        entry = get_item(boxfile.replace('\\','/'))
+        entry = get_item(boxfile)
         id = entry['id']
         data[boxfile] = {}
         data[boxfile]['file-id'] = id
@@ -190,6 +189,11 @@ def task(args):
         with open('.box-json', 'wb') as f:
             f.write(json.dumps(data))
 
+
+def comment(args):
+    boxfile = get_box_path(args.file)
+    j = get_item(boxfile)
+    add_comment(j['id'], args.message)
 
 def refresh(args):
     '''get new tokens from box.com'''
@@ -230,6 +234,12 @@ Dec 13 2103 9am''')
 
     p_task.add_argument('-U','--update-task', help='update a task by its id')
     p_task.set_defaults(func=task)
+
+    # adding comments to files
+    p_com = subparsers.add_parser('comment', help='create a comment')
+    p_com.add_argument('file', nargs='?')
+    p_com.add_argument('-m', '--message', help='message for comment')
+    p_com.set_defaults(func=comment)
 
     ##################################################################
     p_refresh = subparsers.add_parser('authenticate', 
