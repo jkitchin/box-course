@@ -1,8 +1,8 @@
 #!python
 '''
-command line utility for box course
+command line utility for box
 
-box-course -h for documentation
+box -h for documentation
 '''
 
 import json, os
@@ -11,7 +11,8 @@ import dateutil
 from box_course import *
 from box_course.box import *
 
-BOX_SYNC_ROOT = os.path.normpath(os.path.expanduser('~/Documents/My Box Files'))
+#BOX_SYNC_ROOT = os.path.normpath(os.path.expanduser('~\Box Sync'))
+BOX_SYNC_ROOT = os.path.normpath(os.path.expanduser('C:\Users\jkitchin\Documents\My Box Files'))
 
 def collaboration(args):
     '''
@@ -28,6 +29,25 @@ def collaboration(args):
         data = {}
 
     cwd = os.getcwd()
+
+    if args.list_collaborations:
+        abspath = os.path.normcase(os.path.abspath('.'))
+        boxdir = abspath.replace(os.path.normcase(BOX_SYNC_ROOT), '')   
+        print abspath
+        print boxdir
+        print os.path.normcase(BOX_SYNC_ROOT)
+        # this is how I get the path on box.
+        # This probably is not cross-platform. I have to replace the slashes too.
+        entry = get_item(boxdir.replace('\\','/'))  
+        print 'Collaborations:'
+        r = get_collaborations(entry['id'])
+        for entry in r['entries']:
+            print '''
+  status:    {0}
+  login:     {1}
+  role:      {2}
+  collab-id: {3}'''.format(entry['status'], entry['accessible_by']['login'], entry['role'], entry['id'])
+        return
 
     for login in args.logins:
         if args.remove:
@@ -48,10 +68,11 @@ def collaboration(args):
                 data[login]['role'] = args.role
             else:
                 # get id of cwd
-                cwd = os.getcwd()
-                # this is how I get the path on box.
                 # This probably is not cross-platform. I have to replace the slashes too.
-                boxdir = cwd.replace(BOX_SYNC_ROOT, '')                
+                abspath = os.path.normcase(os.path.abspath('.'))
+                boxdir = abspath.replace(os.path.normcase(BOX_SYNC_ROOT), '')   
+
+                print boxdir,'---',BOX_SYNC_ROOT
                 entry = get_item(boxdir.replace('\\','/'))  
                 
                 r = add_collaboration(entry['id'], login, args.role)
@@ -91,19 +112,41 @@ def task(args):
     else:
         due_at = None
 
-    # this is probably a user command
-    if args.update_assignment:
-        print 'updating assigment'
-        taid = args.update_assignment
-        r = update_task_assignment(taid, args.message)
-        print r
-        return
-
     # this is where I update the message/due date
     if args.update_task:
         tid = args.update_task
         r = update_task(tid, args.message, due_at)
         print r
+        return
+
+    if args.list_tasks:
+        print 'listing tasks'
+        f = args.list_tasks  # this is the file to list tasks for
+        abspath = os.path.normcase(os.path.abspath(f))
+        boxfile = abspath.replace(os.path.normcase(BOX_SYNC_ROOT), '')   
+        boxfile = boxfile.replace('\\','/')
+
+        if boxfile in data:
+            fileid = data[boxfile]['file-id']
+        else:
+            r = get_item(boxfile)
+            fileid = r['id']
+
+        
+        r = get_file_tasks(fileid)
+        print 'Task details:'
+        for task in r['entries']:
+            taskid = task['id']
+            r = get_task(taskid)
+            #print json.dumps(r, sort_keys=True, indent=4)
+            print '''Task {0}
+   message: {1}
+   due_at:  {2}'''.format(r['id'], r['message'],r['due_at'])
+
+            for entry in r['task_assignment_collection']['entries']:
+                print '''Assigned to:
+ task_assignment id: {0}
+   {1}'''.format(entry['assigned_to']['id'],entry['assigned_to']['login'])
         return
 
     # first, get id of the file.
@@ -145,10 +188,6 @@ def task(args):
             f.write(json.dumps(data))
 
 
-    
-
-
-
 def refresh(args):
     '''get new tokens from box.com'''
     refresh_tokens()
@@ -167,7 +206,8 @@ if __name__ == '__main__':
 
     # for creating/editing a collaboration
     p_collab = subparsers.add_parser('collaborate', help='create a collaboration in cwd')
-    p_collab.add_argument('logins', nargs='+')
+    p_collab.add_argument('logins', nargs='*')
+    p_collab.add_argument('-l','--list-collaborations', action='store_true')
     p_collab.add_argument('-r', '--role', 
                           default='viewer',
                           help='role, e.g. editor, viewer')
@@ -183,9 +223,9 @@ if __name__ == '__main__':
     p_task.add_argument('-m', '--message', help='message for task')
     p_task.add_argument('-d','--due-at', help='''Due date. try to use a reasonable format. some examples are:
 Dec 13 2103 9am''')
+    p_task.add_argument('-l','--list-tasks', help='list tasks for this file')
 
-    p_task.add_argument('-u','--update-assignment', help='update a task assignment')
-    p_task.add_argument('-U','--update-task', help='update a task')
+    p_task.add_argument('-U','--update-task', help='update a task by its id')
     p_task.set_defaults(func=task)
 
     ##################################################################
