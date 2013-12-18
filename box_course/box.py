@@ -13,13 +13,6 @@ The api is not 100% covered, and even within a function not all of the options m
 
 It is not obvious what the most consistent return data is. Not all calls return 200, even when successful.
 
-This module could be the foundation for box-cli. That command might look like this:
-
-box-cli info file
-box-cli collaborate --add/--remove/--edit login role
-box-cli task --add/--remove/--edit login message
-box-cli comment file message
-
 or it could be built into a right-click context menu in windows.
 '''
 import json, os, time
@@ -149,7 +142,8 @@ def get_item(name, parent_id=0):
                 entry = j['entries'][ind]
                 id = entry['id'] # redefine id for loop
             else: # not found
-                return None
+                print '{0} not found'.format(name)
+                return r
     return entry # I think this is a dictionary from json
 
 
@@ -532,6 +526,14 @@ def delete_task(id):
     else:
         raise Exception('Could not delete {0}'.format(id))
 
+
+def get_task(taskid):
+    headers = {"Authorization": "Bearer %s" % get_access_token()}
+    uri = '/tasks/{0}'.format(taskid)
+    r = requests.get(API_URI + uri, headers=headers)
+    return json.loads(r.text)
+
+
 def get_task_assignments(id):
     '''
     gets all the assignments for a task id
@@ -542,6 +544,16 @@ def get_task_assignments(id):
     uri = '/tasks/{0}/assignments'.format(id)
     r = requests.get(API_URI + uri, headers=headers)
     return json.loads(r.text)
+
+def get_file_tasks(fileid):
+    '''
+    http://developers.box.com/docs/#files-get-the-tasks-for-a-file
+    '''
+    headers = {"Authorization": "Bearer %s" % get_access_token()}
+    uri = '/files/{0}/tasks'.format(fileid)
+    r = requests.get(API_URI + uri, headers=headers)
+    return json.loads(r.text)
+
 
 def assign_task(task_id, login):
     '''
