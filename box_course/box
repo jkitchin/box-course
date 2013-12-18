@@ -11,8 +11,19 @@ import dateutil
 from box_course import *
 from box_course.box import *
 
-#BOX_SYNC_ROOT = os.path.normpath(os.path.expanduser('~\Box Sync'))
-BOX_SYNC_ROOT = os.path.normpath(os.path.expanduser('C:\Users\jkitchin\Documents\My Box Files'))
+def get_box_path(fname_or_dir):
+    '''returns the box path of the arg which is a local file or directory'''
+    
+    wd, last = os.getcwd(), True
+    while last:
+        wd, last = os.path.split(wd)
+        cfile = os.path.join(wd, 'Box Sync ReadMe.pdf')
+        if os.path.exists(cfile):
+            # we found box root
+            break
+
+
+    return os.path.normcase(os.path.abspath(fname_or_dir)).replace(os.path.normcase(wd), '').replace('\\','/')
 
 def collaboration(args):
     '''
@@ -31,14 +42,9 @@ def collaboration(args):
     cwd = os.getcwd()
 
     if args.list_collaborations:
-        abspath = os.path.normcase(os.path.abspath('.'))
-        boxdir = abspath.replace(os.path.normcase(BOX_SYNC_ROOT), '')   
-        print abspath
-        print boxdir
-        print os.path.normcase(BOX_SYNC_ROOT)
-        # this is how I get the path on box.
-        # This probably is not cross-platform. I have to replace the slashes too.
-        entry = get_item(boxdir.replace('\\','/'))  
+
+        boxdir = get_box_path('.')
+        entry = get_item(boxdir)  
         print 'Collaborations:'
         r = get_collaborations(entry['id'])
         for entry in r['entries']:
@@ -122,16 +128,13 @@ def task(args):
     if args.list_tasks:
         print 'listing tasks'
         f = args.list_tasks  # this is the file to list tasks for
-        abspath = os.path.normcase(os.path.abspath(f))
-        boxfile = abspath.replace(os.path.normcase(BOX_SYNC_ROOT), '')   
-        boxfile = boxfile.replace('\\','/')
+        boxfile = get_box_path(f)
 
         if boxfile in data:
             fileid = data[boxfile]['file-id']
         else:
             r = get_item(boxfile)
             fileid = r['id']
-
         
         r = get_file_tasks(fileid)
         print 'Task details:'
