@@ -205,6 +205,64 @@ def update_folder_information(folder_id,
                      data=json.dumps(data))
     return json.loads(r.text)
 
+def create_folder_email_upload(folder_id,
+                               access=None):
+    '''
+    access is either open or collaborators. None turns off the email.
+    '''
+    uri = '/folders/{0}'.format(folder_id)
+    headers = {"Authorization": "Bearer %s" % get_access_token()}
+    if access:
+        data = {'folder_upload_email':{'access':access}}
+    else:
+        data = {'folder_upload_email':None}
+
+    r = requests.put(API_URI + uri, 
+                     headers=headers, 
+                     data=json.dumps(data))
+    
+    return json.loads(r.text)
+
+    
+def create_shared_link(folder_id, 
+                       access=None,
+                       unshared_at=None,
+                       can_download=True,
+                       can_preview=True):
+    '''
+    access could be None(unshare the folder), open, company or collaborators
+    unshared_at is a timestamp for ending the sharing
+
+    can_download is either true or false
+    can_preview is either true or false
+    https://developers.box.com/docs/#folders-create-a-shared-link-for-a-folder
+    http://developers.box.com/docs/#folders-update-information-about-a-folder
+    '''
+
+    uri = '/folders/{0}'.format(folder_id)
+
+    headers = {"Authorization": "Bearer %s" % get_access_token()}
+    data = {'shared_link':{'access':access}}
+
+    if unshared_at:
+        data['shared_link']['unshared_at'] = unshared_at
+
+    if (can_download or can_preview) and (access in ['open','company']):
+        data['shared_link']['permissions']={}
+        if can_download:
+            data['shared_link']['permissions']['can_download'] = True
+        if can_preview:
+            data['shared_link']['permissions']['can_preview'] = True
+
+    # this unshares the folder link
+    if access is None:
+        data = {"shared_link":None}
+
+    r = requests.put(API_URI + uri, 
+                     headers=headers, 
+                     data=json.dumps(data))
+
+    return json.loads(r.text)
     
 def delete_folder(parent_id, recursive=False):
     '''Delete a folder with parent_id
@@ -350,7 +408,7 @@ def comment(id, message):
                       headers=headers,
                       data=json.dumps(data))
     return json.loads(r.text)
-
+add_comment = comment  # consistency alias
 
 def change_comment(comment_id, new_message):
     '''http://developers.box.com/docs/#comments-change-a-comments-message'''
