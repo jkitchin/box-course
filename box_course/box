@@ -17,11 +17,11 @@ def get_box_path(fname_or_dir):
     wd, last = os.getcwd(), True
     while last:
         wd, last = os.path.split(wd)
+        #TODO not robust for Box Sync v4, which does not have this file
         cfile = os.path.join(wd, 'Box Sync ReadMe.pdf')
         if os.path.exists(cfile):
             # we found box root
             break
-
 
     return os.path.normcase(os.path.abspath(fname_or_dir)).replace(os.path.normcase(wd), '').replace('\\','/')
 
@@ -191,9 +191,52 @@ def task(args):
 
 
 def comment(args):
+    '''
+    add a comment to a file
+    '''
     boxfile = get_box_path(args.file)
     j = get_item(boxfile)
     add_comment(j['id'], args.message)
+
+
+def folder(args):
+    '''
+    update folder information
+    '''
+
+    boxdir = get_box_path('.')
+    entry = get_item(boxdir)  
+
+    if args.email_upload:
+        # this is a string, which we may set to None to remove email
+        if args.email_upload.lower() == 'none':
+            access = None
+        else:
+            access = args.email_upload
+        j = create_folder_email_upload(entry['id'], access)
+        print json.dumps(j['folder_upload_email'], 
+                         sort_keys=True, indent=4)
+        return 
+
+    if args.unshare_link:
+        j = create_shared_link(entry['id'],
+                               access=None)
+        print json.dumps(j['shared_link'], sort_keys=True, indent=4)
+        return
+
+    if args.share_link:
+        print 'sharing: ',args.share_link
+        j = create_shared_link(entry['id'],
+                               access=args.share_link)
+
+        print json.dumps(j['shared_link'], sort_keys=True, indent=4)
+        return
+
+
+
+    j = update_folder_information(entry['id'], description=args.description)
+    print json.dumps(j, indent=4, sort_keys=True)
+
 
 def refresh(args):
     '''get new tokens from box.com'''
@@ -240,6 +283,27 @@ Dec 13 2103 9am''')
     p_com.add_argument('file', nargs='?')
     p_com.add_argument('-m', '--message', help='message for comment')
     p_com.set_defaults(func=comment)
+
+    # adding descriptions to folders
+    p_fold = subparsers.add_parser('folder', help='do things on folders')
+
+    pp_fold = p_fold.add_mutually_exclusive_group()
+    pp_fold.add_argument('-s','--share-link', nargs='?',
+                         const='collaborators',
+#                        default='collaborators',
+                        help='get shared link')
+    pp_fold.add_argument('-u','--unshare-link', 
+                        action='store_true',
+                        help='unshare this folder link')
+
+    p_fold.add_argument('-e','--email-upload', nargs='?',
+                        const='collaborators',
+#                        default='collaborators',
+                        help='get email address for upload')
+
+    p_fold.add_argument('-d','--description', 
+                        help='update folder description')
+    p_fold.set_defaults(func=folder)
 
     ##################################################################
     p_refresh = subparsers.add_parser('authenticate', 
